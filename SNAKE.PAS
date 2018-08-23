@@ -5,6 +5,7 @@ uses Dos;
 const
   WIDTH = 20; { map width in 5x5 tiles }
   HEIGHT = 16; { map height in 5x5 tiles }
+  MAP_SIZE = WIDTH * HEIGHT;
   BORDER_COLOR = 11;
   KEY_ESC = 1; KEY_LEFT = 75; KEY_RIGHT = 77; KEY_UP = 72; KEY_DOWN = 80;
 
@@ -12,14 +13,16 @@ type
   BITMAP_FONT = array[char] of word;
   MAP_TYPE = record
     torus: boolean;
-    tiles: array[0..(WIDTH * HEIGHT)] of char;
+    tiles: array[0..MAP_SIZE] of char;
   end;
   SNAKE_TYPE = record
     sx, sy: word; { head position }
     dir: word; { movement direction }
     length: word;
-    tails: array[0..25] of word;
+    tails: array[0..MAP_SIZE] of word;
+    t_start, t_end: word;
   end;
+
 var
   font: BITMAP_FONT;
   map: MAP_TYPE;
@@ -198,8 +201,17 @@ begin
 end;
 
 procedure draw_snake(ox, oy: word);
+var i, x, y: word;
 begin
-  put_box(ox + 5*snake.sx, oy + 5*snake.sy, 5, 5, 40);
+  i := snake.t_end;
+  while True do
+  begin
+    x := snake.tails[i] mod WIDTH;
+    y := snake.tails[i] div WIDTH;
+    put_box(ox + 5*x, oy + 5*y, 5, 5, 40);
+    if i = snake.t_start then break;
+    i := (i+1) mod MAP_SIZE;
+  end
 end;
 
 procedure draw_map; { size of output is (5*WIDTH+2)x(5*HEIGHT+2) }
@@ -234,14 +246,38 @@ end;
 procedure handle_keys;
 begin
   if keys[KEY_ESC] then die(False);
-  if keys[KEY_UP] then snake.dir := 0;
-  if keys[KEY_RIGHT] then snake.dir := 1;
-  if keys[KEY_DOWN] then snake.dir := 2;
-  if keys[KEY_LEFT] then snake.dir := 3;
+  if keys[KEY_UP] and (snake.dir <> 2) then snake.dir := 0;
+  if keys[KEY_RIGHT] and (snake.dir <> 3) then snake.dir := 1;
+  if keys[KEY_DOWN] and (snake.dir <> 0) then snake.dir := 2;
+  if keys[KEY_LEFT] and (snake.dir <> 1) then snake.dir := 3;
+end;
+
+procedure pop_tail;
+begin
+  snake.t_end := (snake.t_end + 1) mod MAP_SIZE;
+end;
+
+procedure push_tail(value: word);
+begin
+  snake.t_start := (snake.t_start + 1) mod MAP_SIZE;
+  snake.tails[snake.t_start] := value;
+end;
+
+
+procedure generate_cherry;
+var x, y: word;
+begin
+  while True do
+  begin
+    x := random(WIDTH);
+    y := random(HEIGHT);
+    if map.tiles[y*WIDTH+x] = ' ' then break;
+  end;
+  map.tiles[y*WIDTH+x] := 'c';
 end;
 
 procedure loop;
-var h, m, s, ss, last_ss, levwl: word; tile: char;
+var h, m, s, ss, last_ss: word; tile: char;
 begin
   while game_state <> 2 do
   begin
@@ -270,7 +306,8 @@ begin
       begin
         score := score + 100;
         map.tiles[snake.sy * WIDTH + snake.sx] := ' ';
-      end;
+        generate_cherry;
+      end else pop_tail;
 
       if tile = 'x' then
       begin
@@ -278,12 +315,14 @@ begin
         break;
       end;
 
+      push_tail(snake.sy * WIDTH + snake.sx);
       score := score + 1;
       time := time + 1;
       draw_map;
     end;
   end;
 end;
+
 
 begin
   init_font; init_13h; randomize;
